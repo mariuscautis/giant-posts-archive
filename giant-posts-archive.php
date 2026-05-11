@@ -42,10 +42,13 @@ function giant_posts_archive_register(): void {
 		'category'        => 'widgets',
 		'icon'            => 'archive',
 		'attributes'      => [
-			'postType'     => [ 'type' => 'string',  'default' => 'post' ],
-			'postsPerPage' => [ 'type' => 'integer', 'default' => 6 ],
-			'heading'      => [ 'type' => 'string',  'default' => '' ],
-			'className'    => [ 'type' => 'string',  'default' => '' ],
+			'postType'       => [ 'type' => 'string',  'default' => 'post' ],
+			'postsPerPage'   => [ 'type' => 'integer', 'default' => 6 ],
+			'heading'        => [ 'type' => 'string',  'default' => '' ],
+			'className'      => [ 'type' => 'string',  'default' => '' ],
+			'accentColor'    => [ 'type' => 'string',  'default' => '' ],
+			'cardBgColor'    => [ 'type' => 'string',  'default' => '' ],
+			'filterBtnColor' => [ 'type' => 'string',  'default' => '' ],
 		],
 		'editor_script'   => 'giant-posts-archive-editor',
 		'style'           => 'giant-posts-archive-style',
@@ -210,6 +213,29 @@ function giant_posts_archive_render( array $attrs ): string {
 	$heading        = sanitize_text_field( $attrs['heading'] ?? '' );
 	$extra_class    = implode( ' ', array_map( 'sanitize_html_class', explode( ' ', trim( $attrs['className'] ?? '' ) ) ) );
 
+	$accent_color     = sanitize_hex_color( $attrs['accentColor']    ?? '' ) ?: '';
+	$card_bg_color    = sanitize_hex_color( $attrs['cardBgColor']    ?? '' ) ?: '';
+	$filter_btn_color = sanitize_hex_color( $attrs['filterBtnColor'] ?? '' ) ?: '';
+
+	// Generate a unique scope ID for this block instance so styles don't bleed
+	$scope_id  = 'gpa-' . substr( md5( serialize( $attrs ) . uniqid() ), 0, 8 );
+	$inline_css = '';
+	if ( $accent_color ) {
+		$inline_css .= '#' . $scope_id . ' .blog-date,'
+			. '#' . $scope_id . ' .blog-btn,'
+			. '#' . $scope_id . ' .gpa-select,'
+			. '#' . $scope_id . ' .gpa-page-btn,'
+			. '#' . $scope_id . ' .gpa-page-num { color:' . esc_attr( $accent_color ) . '; border-color:' . esc_attr( $accent_color ) . '; }'
+			. '#' . $scope_id . ' .gpa-select { border-bottom-color:' . esc_attr( $accent_color ) . '; }'
+			. '#' . $scope_id . ' .gpa-page-num.active { background:' . esc_attr( $accent_color ) . '; color:#fff; }';
+	}
+	if ( $card_bg_color ) {
+		$inline_css .= '#' . $scope_id . ' .blog-inner { background-color:' . esc_attr( $card_bg_color ) . '; }';
+	}
+	if ( $filter_btn_color ) {
+		$inline_css .= '#' . $scope_id . ' .gpa-filter-btn { background-color:' . esc_attr( $filter_btn_color ) . '; }';
+	}
+
 	// Categories for the filter dropdown (only applicable to 'post' type natively)
 	$categories = get_categories( [ 'hide_empty' => true ] );
 
@@ -232,7 +258,11 @@ function giant_posts_archive_render( array $attrs ): string {
 
 	ob_start();
 	?>
+	<?php if ( $inline_css ) : ?>
+	<style><?php echo $inline_css; ?></style>
+	<?php endif; ?>
 	<section
+		id="<?php echo esc_attr( $scope_id ); ?>"
 		class="posts-archive<?php echo $extra_class ? ' ' . esc_attr( $extra_class ) : ''; ?>"
 		data-post-type="<?php echo esc_attr( $post_type ); ?>"
 		data-posts-per-page="<?php echo esc_attr( $posts_per_page ); ?>"

@@ -14,15 +14,79 @@
 
 	var useBlockProps     = wp.blockEditor.useBlockProps;
 	var InspectorControls = wp.blockEditor.InspectorControls;
+	var useSettings       = wp.blockEditor.useSettings;
 
 	var PanelBody     = wp.components.PanelBody;
 	var SelectControl = wp.components.SelectControl;
 	var RangeControl  = wp.components.RangeControl;
 	var TextControl   = wp.components.TextControl;
+	var ColorPicker   = wp.components.ColorPicker;
+	var ColorPalette  = wp.components.ColorPalette;
 	var Spinner       = wp.components.Spinner;
 
 	var apiFetch         = wp.apiFetch;
 	var registerBlockType = wp.blocks.registerBlockType;
+
+	/* ── Colour field: theme palette swatches + custom picker ── */
+	var CHECKERBOARD = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'8\' height=\'8\'%3E%3Crect width=\'4\' height=\'4\' fill=\'%23ccc\'/%3E%3Crect x=\'4\' y=\'4\' width=\'4\' height=\'4\' fill=\'%23ccc\'/%3E%3C/svg%3E")';
+
+	function ColourField( props ) {
+		var settingsResult = useSettings( 'color.palette' );
+		var themePalette   = ( settingsResult && settingsResult[0] ) || [];
+
+		var customState  = useState( false );
+		var showCustom   = customState[0];
+		var setShowCustom = customState[1];
+
+		var isTransparent = ! props.value || props.value === 'transparent';
+
+		var swatchStyle = {
+			display:      'inline-block',
+			width:        18,
+			height:       18,
+			borderRadius: 2,
+			border:       '1px solid rgba(0,0,0,0.15)',
+			flexShrink:   0,
+			background:   isTransparent ? CHECKERBOARD + ', #fff' : props.value,
+		};
+
+		return el( 'div', { style: { marginBottom: 16 } },
+			el( 'p', { style: { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8, color: '#757575' } }, props.label ),
+			el( 'div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 } },
+				el( 'span', { style: swatchStyle } ),
+				el( 'span', { style: { fontSize: 12, color: '#444' } }, isTransparent ? 'Transparent' : props.value )
+			),
+			el( ColorPalette, {
+				colors:              themePalette,
+				value:               ( ! isTransparent && props.value ) || '',
+				onChange: function ( v ) {
+					props.onChange( v || 'transparent' );
+					setShowCustom( false );
+				},
+				disableCustomColors: true,
+				clearable:           false,
+			} ),
+			el( 'button', {
+				type:    'button',
+				onClick: function () { setShowCustom( ! showCustom ); },
+				style:   { fontSize: 12, color: '#1a9ad6', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline', display: 'block', marginTop: 4 },
+			}, showCustom ? 'Hide custom colour' : 'Custom colour…' ),
+			showCustom && el( 'div', { style: { marginTop: 8, border: '1px solid #e0e0e0', borderRadius: 4, overflow: 'hidden' } },
+				el( ColorPicker, {
+					color:       ( ! isTransparent && props.value ) || '#ffffff',
+					enableAlpha: true,
+					onChange: function ( v ) { props.onChange( v ); },
+				} ),
+				el( 'div', { style: { padding: '4px 12px 10px' } },
+					el( 'button', {
+						type:    'button',
+						onClick: function () { props.onChange( 'transparent' ); setShowCustom( false ); },
+						style:   { fontSize: 12, color: '#1a9ad6', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' },
+					}, 'Set transparent' )
+				)
+			)
+		);
+	}
 
 	/* ── Editor preview card ── */
 	function PreviewCard( props ) {
@@ -78,6 +142,16 @@
 	/* ── Main Block ── */
 	registerBlockType( 'giant-posts-archive/posts-archive', {
 
+		attributes: {
+			postType:      { type: 'string',  default: 'post' },
+			postsPerPage:  { type: 'integer', default: 6 },
+			heading:       { type: 'string',  default: '' },
+			className:     { type: 'string',  default: '' },
+			accentColor:   { type: 'string',  default: '' },
+			cardBgColor:   { type: 'string',  default: '' },
+			filterBtnColor: { type: 'string', default: '' },
+		},
+
 		edit: function ( props ) {
 			var attrs    = props.attributes;
 			var setAttrs = props.setAttributes;
@@ -109,6 +183,25 @@
 				previewCards.push( el( PreviewCard, { key: i, index: i } ) );
 			}
 
+			var clientId    = props.clientId;
+			var scopeClass  = 'gpa-instance-' + clientId.replace( /-/g, '' ).slice( 0, 8 );
+			var inlineStyle = '';
+			if ( attrs.accentColor ) {
+				inlineStyle += '.' + scopeClass + ' .blog-date,' +
+					'.' + scopeClass + ' .blog-btn,' +
+					'.' + scopeClass + ' .gpa-select,' +
+					'.' + scopeClass + ' .gpa-page-btn,' +
+					'.' + scopeClass + ' .gpa-page-num { color:' + attrs.accentColor + '; border-color:' + attrs.accentColor + '; }' +
+					'.' + scopeClass + ' .gpa-select { border-bottom-color:' + attrs.accentColor + '; }' +
+					'.' + scopeClass + ' .gpa-page-num.active { background:' + attrs.accentColor + '; color:#fff; }';
+			}
+			if ( attrs.cardBgColor ) {
+				inlineStyle += '.' + scopeClass + ' .blog-inner { background-color:' + attrs.cardBgColor + '; }';
+			}
+			if ( attrs.filterBtnColor ) {
+				inlineStyle += '.' + scopeClass + ' .gpa-filter-btn { background-color:' + attrs.filterBtnColor + '; }';
+			}
+
 			var inspectorPanel = el( InspectorControls, null,
 
 				el( PanelBody, { title: __( 'Query Settings', 'giant-posts-archive' ), initialOpen: true },
@@ -137,10 +230,33 @@
 						value:    attrs.heading,
 						onChange: function ( v ) { setAttrs( { heading: v } ); },
 					} )
+				),
+
+				el( PanelBody, { title: __( 'Colours', 'giant-posts-archive' ), initialOpen: false },
+					el( ColourField, {
+						label:    __( 'Accent colour', 'giant-posts-archive' ),
+						value:    attrs.accentColor,
+						onChange: function ( v ) { setAttrs( { accentColor: v } ); },
+					} ),
+					el( ColourField, {
+						label:    __( 'Card background', 'giant-posts-archive' ),
+						value:    attrs.cardBgColor,
+						onChange: function ( v ) { setAttrs( { cardBgColor: v } ); },
+					} ),
+					el( ColourField, {
+						label:    __( 'Filter button colour', 'giant-posts-archive' ),
+						value:    attrs.filterBtnColor,
+						onChange: function ( v ) { setAttrs( { filterBtnColor: v } ); },
+					} )
 				)
 			);
 
-			var editorBlock = el( 'section', blockProps,
+			var mergedProps = Object.assign( {}, blockProps, {
+				className: ( blockProps.className || '' ) + ' ' + scopeClass,
+			} );
+
+			var editorBlock = el( 'section', mergedProps,
+				inlineStyle && el( 'style', null, inlineStyle ),
 				el( 'div', { className: 'container' },
 					attrs.heading && el( 'h3', { className: 'loop-heading' }, attrs.heading ),
 					el( FilterBarPreview ),
