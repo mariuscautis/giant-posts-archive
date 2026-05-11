@@ -32,10 +32,20 @@
 
 	function ColourField( props ) {
 		var settingsResult = useSettings( 'color.palette' );
-		var themePalette   = ( settingsResult && settingsResult[0] ) || [];
+		var rawPalette     = ( settingsResult && settingsResult[0] ) || [];
+		// Flatten theme + custom buckets if the API returns segmented objects
+		var themePalette = [];
+		if ( rawPalette.length ) {
+			rawPalette.forEach( function ( entry ) {
+				if ( entry && typeof entry === 'object' && entry.color ) {
+					themePalette.push( entry );
+				}
+			} );
+		}
+		var hasPalette = themePalette.length > 0;
 
-		var customState  = useState( false );
-		var showCustom   = customState[0];
+		var customState   = useState( ! hasPalette );
+		var showCustom    = customState[0];
 		var setShowCustom = customState[1];
 
 		var isTransparent = ! props.value || props.value === 'transparent';
@@ -54,17 +64,17 @@
 			el( 'p', { style: { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', marginBottom: 8, color: '#757575' } }, props.label ),
 			el( 'div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 } },
 				el( 'span', { style: swatchStyle } ),
-				el( 'span', { style: { fontSize: 12, color: '#444' } }, isTransparent ? 'Transparent' : props.value )
+				el( 'span', { style: { fontSize: 12, color: '#444' } }, isTransparent ? 'None' : props.value )
 			),
-			el( ColorPalette, {
+			hasPalette && el( ColorPalette, {
 				colors:              themePalette,
 				value:               ( ! isTransparent && props.value ) || '',
 				onChange: function ( v ) {
-					props.onChange( v || 'transparent' );
+					props.onChange( v || '' );
 					setShowCustom( false );
 				},
 				disableCustomColors: true,
-				clearable:           false,
+				clearable:           true,
 			} ),
 			el( 'button', {
 				type:    'button',
@@ -80,9 +90,9 @@
 				el( 'div', { style: { padding: '4px 12px 10px' } },
 					el( 'button', {
 						type:    'button',
-						onClick: function () { props.onChange( 'transparent' ); setShowCustom( false ); },
+						onClick: function () { props.onChange( '' ); setShowCustom( false ); },
 						style:   { fontSize: 12, color: '#1a9ad6', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' },
-					}, 'Set transparent' )
+					}, 'Clear colour' )
 				)
 			)
 		);
